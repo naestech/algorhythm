@@ -32,14 +32,26 @@ def lastfm_request(endpoint, params):
 def create_signature(params, secret):
     # sort parameters alphabetically and concatenate them into a single string
     sorted_params = ''.join(f"{key}{params[key]}" for key in sorted(params))
-    
+     
     # create the signature using hmac and the shared secret
     signature = hmac.new(secret.encode(), sorted_params.encode(), hashlib.md5).hexdigest()
     return signature
 
 def get_user_input():
     input_type = input("Enter type (artist, album, song): ").strip().lower()
-    query = input(f"Enter the {input_type} name: ").strip()
+    if input_type == 'artist':
+        query = input(f"Enter the {input_type} name: ").strip()
+    elif input_type in ['album', 'song']:
+        query = input(f"Enter {input_type} name: ").strip()
+        artist = input(f"Enter the artist name for the {input_type}: ").strip()
+        verify = input(f"You entered '{query}' by '{artist}', is this correct? (yes/no): ").strip().lower()
+        if verify != 'yes':
+            print("Let's try again.")
+            return get_user_input()
+        query = f"{query} by {artist}"
+    else:
+        print("Invalid type.")
+        return get_user_input()
     return input_type, query
 
 def recommend(input_type, query):
@@ -55,26 +67,29 @@ def recommend_artists(artist_name):
     if results['artists']['items']:
         artist = results['artists']['items'][0]
         recommendations = spotify.artist_related_artists(artist['id'])
-        rec_artists = [rec['name'] for rec in recommendations['artists'][:3]]
-        return ensure_smaller_artist(rec_artists)
+        rec_artists = [(rec['name'], rec['external_urls']['spotify']) for rec in recommendations['artists'][:3]]
+        rec_artists = ensure_smaller_artist(rec_artists)
+        return rec_artists
     return []
 
 def recommend_albums(album_name):
-    results = spotify.search(q=f'album:{album_name}', type='album')
+    album, artist = album_name.split(" by ")
+    results = spotify.search(q=f'album:{album} artist:{artist}', type='album')
     if results['albums']['items']:
         album = results['albums']['items'][0]
         artist_id = album['artists'][0]['id']
         recommendations = spotify.artist_albums(artist_id, album_type='album', limit=3)
-        rec_albums = [rec['name'] for rec in recommendations['items']]
+        rec_albums = [(rec['name'], rec['external_urls']['spotify']) for rec in recommendations['items']]
         return rec_albums
     return []
 
 def recommend_songs(song_name):
-    results = spotify.search(q=f'track:{song_name}', type='track')
+    song, artist = song_name.split(" by ")
+    results = spotify.search(q=f'track:{song} artist:{artist}', type='track')
     if results['tracks']['items']:
         track = results['tracks']['items'][0]
         recommendations = spotify.recommendations(seed_tracks=[track['id']], limit=3)
-        rec_songs = [rec['name'] for rec in recommendations['tracks']]
+        rec_songs = [(rec['name'], rec['external_urls']['spotify']) for rec in recommendations['tracks']]
         return rec_songs
     return []
 
@@ -87,9 +102,9 @@ def get_artist_popularity(artist_name):
 
 def filter_smaller_artists(recommendations):
     smaller_artists = []
-    for artist in recommendations:
+    for artist, link in recommendations:
         if get_artist_popularity(artist) < 200000:
-            smaller_artists.append(artist)
+            smaller_artists.append((artist, link))
     if smaller_artists:
         return smaller_artists[0]
     else:
@@ -101,7 +116,7 @@ def ensure_smaller_artist(recommendations):
     return recommendations
 
 def get_user_feedback(recommendations):
-    for rec in recommendations:
+    for rec, link in recommendations:
         feedback = input(f"Do you like '{rec}'? (yes/no/never heard of): ").strip().lower()
         if feedback == 'yes':
             print(f"Great! Adding '{rec}' to your liked list.")
@@ -114,16 +129,31 @@ def get_user_feedback(recommendations):
 
 def user_feedback(recommendations):
     print("\nHere are your recommendations:")
-    for rec in recommendations:
-        print(f"- {rec}")
+    for rec, link in recommendations:
+        print(f"- {rec} (Link: {link})")
     get_user_feedback(recommendations)
 
 def artist_mode_recommendations(artist_name):
     recommendations = {}
-    
+
     # related artists
     recommendations['artists'] = recommend_artists(artist_name)
     
+    # ensure maximum of 3 recommendations and at least one smaller artist
+    if len(recommendations['artists']) < 3:
+        # add additional recommendations from last.fm if needed
+        params = {
+            'method': 'artist.getsimilar',
+            'artist': artist_name,
+        }
+        lastfm_recs = lastfm_request('', params).get('similarartists', {}).get('artist', [])
+        for artist in lastfm_recs:
+            if len(recommendations['artists']) >= 3:
+                break
+            if artist['name'] not in [a[0] for a in recommendations['artists']]:
+                recommendations['artists'].append((artist['name'], f"https://www.last.fm/music/{artist['name'].replace(' ', '+')}"))
+        recommendations['artists'] = ensure_smaller_artist(recommendations['artists'])
+
     # albums similar to the latest release
     albums = spotify.search(q=f'artist:{artist_name}', type='album', limit=1)
     if albums['albums']['items']:
@@ -146,8 +176,8 @@ def manage_algorithm(artist_name, recommendations):
     print("\nHere are your algorithm's current recommendations:")
     for category, recs in recommendations.items():
         print(f"{category.capitalize()}:")
-        for rec in recs:
-            print(f"  - {rec}")
+        for rec, link in recs:
+            print(f" - {rec} (Link: {link})")
 
     while True:
         action = input("\nDo you want to add or remove a recommendation? (add/remove/done): ").strip().lower()
@@ -161,10 +191,12 @@ def manage_algorithm(artist_name, recommendations):
                     if len(recommendations[category]) >= 3:
                         print(f"Cannot add more than 3 recommendations in the {category} category. Remove something first.")
                     else:
-                        recommendations[category].append(new_rec)
+                        # dummy link for user-added recommendations
+                        new_link = "https://www.example.com"
+                        recommendations[category].append((new_rec, new_link))
                 elif action == 'remove':
                     rem_rec = input(f"Enter the name of the {category[:-1]} to remove: ").strip()
-                    recommendations[category] = [rec for rec in recommendations[category] if rec != rem_rec]
+                    recommendations[category] = [rec for rec in recommendations[category] if rec[0] != rem_rec]
             else:
                 print("Invalid category.")
         else:
@@ -180,32 +212,29 @@ def main():
             recommendations = recommend(input_type, query)
             if recommendations:
                 print("\nRecommendations:")
-                for rec in recommendations:
-                    print(f"- {rec}")
+                for rec, link in recommendations:
+                    print(f"- {rec} (Link: {link})")
                 user_feedback(recommendations)
             else:
-                print("No recommendations found.")
+                print("Sorry, no recommendations found.")
         elif musician_action == 'manage':
             artist_name = input("Enter your artist name: ").strip()
             recommendations = artist_mode_recommendations(artist_name)
             recommendations = manage_algorithm(artist_name, recommendations)
-            print("\nUpdated Recommendations:")
-            for category, recs in recommendations.items():
-                print(f"{category.capitalize()}:")
-                for rec in recs:
-                    print(f"  - {rec}")
+            user_feedback(recommendations)
         else:
-            print("Invalid action.")
+            print("Invalid option.")
     else:
         input_type, query = get_user_input()
         recommendations = recommend(input_type, query)
         if recommendations:
             print("\nRecommendations:")
-            for rec in recommendations:
-                print(f"- {rec}")
+            for rec, link in recommendations:
+                print(f"- {rec} (Link: {link})")
             user_feedback(recommendations)
         else:
-            print("No recommendations found.")
+            print("Sorry, no recommendations found.")
 
 if __name__ == '__main__':
     main()
+
