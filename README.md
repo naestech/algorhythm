@@ -7,6 +7,11 @@
   <p><i>current output</i></p>
 </div>
 
+<div align="center">
+  <img width="706" alt="Current serverside output" src="https://github.com/naestech/algo-rythym/assets/73083314/7f3836ad-9ca6-4863-8d3e-a6c5749cbcd9">
+  <p><i>current serverside output</i></p>
+</div>
+
 
 
 <div align="center">
