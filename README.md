@@ -2,10 +2,16 @@
 
 ## music discovery curated from a musician's inspiration, with an emphasis on bringing hidden talent to the forefront.
 
-<div align="center">
-  <img width="706" alt="Current output" src="https://github.com/naestech/algo-rythym/assets/73083314/1e0f03a0-506a-4bed-9505-f2c2f7cde1e8">
-  <p><i>current output</i></p>
-</div>
+
+<p align="center">
+  <img width ="250" alt="Fan looking for Artist recommendations" src="https://github.com/naestech/algo-rythym/assets/73083314/9282a6ba-ed0a-4796-879d-fe70b1e8e6a5">
+  <img width ="250" alt="Fan looking for Album recommendations" src="https://github.com/naestech/algo-rythym/assets/73083314/da7efc30-21af-4cc8-99fc-017d84e4b53d">
+  <img width ="250" alt="Fan looking for Song recommendations" src="https://github.com/naestech/algo-rythym/assets/73083314/4d3d024f-9268-4ed2-a321-73020aae07f9">
+</p>
+<p align="center">
+  <em>current terminal outputs</em>
+</p>
+
 
 <div align="center">
   <img width="706" alt="Current serverside output" src="https://github.com/naestech/algo-rythym/assets/73083314/7f3836ad-9ca6-4863-8d3e-a6c5749cbcd9">
