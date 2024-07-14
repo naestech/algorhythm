@@ -1,4 +1,4 @@
-# algo-rythym
+# algorhythm
 
 ## music discovery curated from a musician's inspiration, with an emphasis on bringing hidden talent to the forefront.
 
@@ -29,11 +29,11 @@
 </div>
 
 <div align="center">
-  <a href="https://star-history.com/#naestech/algo-rythym&Date">
+  <a href="https://star-history.com/#naestech/algorhythm&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=naestech/algo-rythym&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=naestech/algo-rythym&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=naestech/algo-rythym&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=naestech/algorhythm&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=naestech/algorhythm&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=naestech/algorhythm&type=Date" />
     </picture>
   </a>
 </div>
