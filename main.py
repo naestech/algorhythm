@@ -7,51 +7,51 @@ import requests
 import hmac
 import hashlib
 
-# Load environment variables from the .env file
+# load environment variables from the .env file
 load_dotenv()
 
-SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
-SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
-SPOTIFY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI')
-LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
-LASTFM_SHARED_SECRET = os.getenv('LASTFM_SHARED_SECRET')
+spotify_client_id = os.getenv('SPOTIFY_CLIENT_ID')
+spotify_client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+spotify_redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
+lastfm_api_key = os.getenv('LASTFM_API_KEY')
+lastfm_shared_secret = os.getenv('LASTFM_SHARED_SECRET')
 
-# Authenticate with Spotify
+# authenticate with spotify
 spotify_auth_manager = SpotifyClientCredentials(
-    client_id=SPOTIFY_CLIENT_ID,
-    client_secret=SPOTIFY_CLIENT_SECRET
+    client_id=spotify_client_id,
+    client_secret=spotify_client_secret
 )
 spotify = spotipy.Spotify(auth_manager=spotify_auth_manager)
 app = Flask(__name__)
 
 def lastfm_request(method, params):
     base_url = 'http://ws.audioscrobbler.com/2.0/'
-    params['api_key'] = LASTFM_API_KEY
+    params['api_key'] = lastfm_api_key
     params['method'] = method
     params['format'] = 'json'
     response = requests.get(base_url, params=params)
     if response.status_code != 200:
-        print(f"Last.fm request failed with status code: {response.status_code}, reason: {response.reason}")
+        print(f"last.fm request failed with status code: {response.status_code}, reason: {response.reason}")
         return None
     try:
         return response.json()
     except ValueError:
-        print("Failed to decode Last.fm response as JSON")
+        print("failed to decode last.fm response as json")
         return None
 
 @app.route('/')
 def home():
-    return "Welcome to Algo-Rhythm!"
+    return "welcome to algo-rhythm!"
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
     if request.method == 'POST':
         data = request.get_json()
-        print(data)  # Debugging line to print incoming JSON data
+        print(data)  # debugging line to print incoming json data
         
         verify = data.get('verify', 'yes')
         if verify.lower() != 'yes':
-            return Response("Error: verification failed.", status=400)
+            return Response("error: verification failed.", status=400)
 
         is_musician = data.get('is_musician')
         if is_musician == 'yes':
@@ -62,7 +62,7 @@ def recommend():
                 if update_type in ['artist', 'album', 'song']:
                     query = data.get('query')
                     if update_type == 'artist':
-                        recs = recommend_artists(artist_name, exclude_artist=artist_name)
+                        recs = recommend_artists(artist_name, exclude_artist=artist_name, query=query)
                     elif update_type == 'album':
                         recs = recommend_albums(query, artist_name, exclude_artist=artist_name)
                     elif update_type == 'song':
@@ -91,142 +91,186 @@ def recommend():
                 recs = recommend_songs(query, artist, exclude_artist=artist)
             return Response("\n".join(recs), content_type='text/plain')
 
-    return "Welcome to Algo-Rhythm!"
+    return "welcome to algo-rhythm!"
 
-def recommend_artists(artist_name, exclude_artist=None):
-    print(f"Searching for similar artists to: {artist_name}")
+def recommend_artists(artist_name, exclude_artist=None, query=None):
+    print(f"searching for similar artists to: {artist_name}")
     response = lastfm_request('artist.getsimilar', {'artist': artist_name})
+    
+    # initialize recommendation list
+    rec_artists = []
+    
+    # include the specified query artist first, if provided
+    if query:
+        query_results = spotify.search(q=f'artist:{query}', type='artist')
+        if query_results['artists']['items']:
+            query_artist = query_results['artists']['items'][0]
+            rec_artists.append((query_artist['name'], query_artist['external_urls']['spotify']))
+    
     if response and 'similarartists' in response:
         similar_artists = response['similarartists']['artist']
-        rec_artists = []
         for artist in similar_artists:
             if len(rec_artists) < 3:
                 if artist['name'].lower() != artist_name.lower() and (exclude_artist is None or artist['name'].lower() != exclude_artist.lower()):
-                    # Check if 'mbid' exists, otherwise use artist name to search on Spotify
                     if 'mbid' in artist:
                         spotify_link = f"https://open.spotify.com/artist/{artist['mbid']}"
                     else:
-                        # Search Spotify for the artist's name to get the Spotify link
                         spotify_results = spotify.search(q=f'artist:{artist["name"]}', type='artist')
                         if spotify_results['artists']['items']:
                             spotify_link = spotify_results['artists']['items'][0]['external_urls']['spotify']
                         else:
-                            continue  # Skip if no Spotify link is found
-                    rec_artists.append((artist['name'], spotify_link))
-        rec_artists = ensure_smaller_artist(rec_artists)
-        formatted_recs = [f"{name}\nlink: {link}" for name, link in rec_artists]
-        print(f"Found recommendations: {formatted_recs}")
-        return formatted_recs
-    print("No similar artists found or response was invalid")
-    return ["No similar artists found"]
+                            continue
+                    if artist['name'] != query:
+                        rec_artists.append((artist['name'], spotify_link))
+    
+    rec_artists = ensure_smaller_artist(rec_artists)
+    formatted_recs = [f"{name}\nlink: {link}" for name, link in [item[:2] for item in rec_artists]]
+    print(f"found recommendations: {formatted_recs}")
+    return formatted_recs
 
 def recommend_albums(album_name, artist_name, exclude_artist=None):
-    print(f"Searching for albums similar to: {album_name} by {artist_name}")
+    print(f"searching for albums similar to: {album_name} by {artist_name}")
     
-    # Verify with user that the input is correct
-    user_verification = input(f"Is the album '{album_name}' by '{artist_name}' correct? (yes/no): ").strip().lower()
+    # verify with user that the input is correct
+    user_verification = input(f"is the album '{album_name}' by '{artist_name}' correct? (yes/no): ").strip().lower()
     if user_verification != 'yes':
-        return ["Input verification failed. Please check the album and artist names."]
+        return ["input verification failed. please check the album and artist names."]
     
-    # Search for the album on Spotify
+    # search for the album on spotify
     results = spotify.search(q=f'album:{album_name} artist:{artist_name}', type='album')
-    print(f"Spotify search results: {results}")  # Debugging line to print the search results
+    print(f"spotify search results: {results}")  # debugging line to print the search results
     
     if not results['albums']['items']:
-        print(f"No albums found for: {album_name} by {artist_name}")
-        return ["No similar albums found"]
+        print(f"no albums found for: {album_name} by {artist_name}")
+        return ["no similar albums found"]
     
     album = results['albums']['items'][0]
-    print(f"Found album: {album}")  # Debugging line to print the found album
+    print(f"found album: {album}")  # debugging line to print the found album
     
-    # Use Last.fm to find similar artists
+    # use last.fm to find similar artists
     response = lastfm_request('artist.getsimilar', {'artist': artist_name})
-    print(f"Last.fm artist.getsimilar response: {response}")  # Debugging line to print the Last.fm response
+    print(f"last.fm artist.getsimilar response: {response}")  # debugging line to print the last.fm response
     
     if response and 'similarartists' in response and 'artist' in response['similarartists']:
         similar_artists = response['similarartists']['artist']
         
         rec_albums = []
         for similar_artist in similar_artists:
-            if len(rec_albums) < 10:  # Fetch more albums to filter better
+            if len(rec_albums) < 10:  # fetch more albums to filter better
                 if similar_artist['name'].lower() != artist_name.lower() and (exclude_artist is None or similar_artist['name'].lower() != exclude_artist.lower()):
-                    # Use Last.fm to find albums by the similar artist
+                    # use last.fm to find albums by the similar artist
                     artist_albums_response = lastfm_request('artist.gettopalbums', {'artist': similar_artist['name']})
-                    print(f"Last.fm artist.gettopalbums response for artist '{similar_artist['name']}': {artist_albums_response}")  # Debugging line to print the artist albums response
+                    print(f"last.fm artist.gettopalbums response for artist '{similar_artist['name']}': {artist_albums_response}")  # debugging line to print the artist albums response
                     if artist_albums_response and 'topalbums' in artist_albums_response and 'album' in artist_albums_response['topalbums']:
                         top_albums = artist_albums_response['topalbums']['album']
                         for top_album in top_albums:
-                            # Search Spotify for the album to get the Spotify link
+                            # search spotify for the album to get the spotify link
                             spotify_results = spotify.search(q=f'album:{top_album["name"]} artist:{similar_artist["name"]}', type='album')
                             if spotify_results['albums']['items']:
                                 spotify_link = spotify_results['albums']['items'][0]['external_urls']['spotify']
                                 rec_albums.append((top_album['name'], similar_artist['name'], spotify_link))
-                                print(f"Added recommendation: {top_album['name']} by {similar_artist['name']}")  # Debugging line to print added recommendations
-                                break  # Only take the first album from each similar artist
+                                print(f"added recommendation: {top_album['name']} by {similar_artist['name']}")  # debugging line to print added recommendations
+                                break  # only take the first album from each similar artist
         
-        print(f"Filtered recommendations before ensuring smaller albums: {rec_albums}")  # Debugging line to print the filtered recommendations
+        print(f"filtered recommendations before ensuring smaller albums: {rec_albums}")  # debugging line to print the filtered recommendations
         
-        # Ensure the first recommendation is from a small artist
+        # ensure the first recommendation is from a small artist
         rec_albums = ensure_smaller_album(rec_albums)
-        formatted_recs = [f"{name} by {artist}\nlink: {link}" for name, artist, link in rec_albums[:3]]  # Return only the first 3 recommendations
-        print(f"Found recommendations: {formatted_recs}")
-        return formatted_recs if formatted_recs else ["No similar albums found"]
+        formatted_recs = [f"{name} by {artist}\nlink: {link}" for name, artist, link in [item[:3] for item in rec_albums[:3]]]
+        print(f"found recommendations: {formatted_recs}")
+        return formatted_recs if formatted_recs else ["no similar albums found"]
     
-    print("No similar albums found or response was invalid")
-    return ["No similar albums found"]
+    print("no similar albums found or response was invalid")
+    return ["no similar albums found"]
 
 def recommend_songs(song_name, artist_name, exclude_artist=None):
-    print(f"Searching for songs similar to: {song_name} by {artist_name}")
+    print(f"searching for songs similar to: {song_name} by {artist_name}")
+    
+    # verify with user that the input is correct
+    user_verification = input(f"is the song '{song_name}' by '{artist_name}' correct? (yes/no): ").strip().lower()
+    if user_verification != 'yes':
+        return ["input verification failed. please check the song and artist names."]
+    
+    # search for the song on spotify
     results = spotify.search(q=f'track:{song_name} artist:{artist_name}', type='track')
-    if results['tracks']['items']:
-        track = results['tracks']['items'][0]
-        recommendations = spotify.recommendations(seed_tracks=[track['id']], limit=50)['tracks']
-        rec_songs = []
-        for rec in recommendations:
-            if len(rec_songs) < 3:
-                if (rec['name'].lower() != song_name.lower() or rec['artists'][0]['name'].lower() != artist_name.lower()) and (exclude_artist is None or rec['artists'][0]['name'].lower() != exclude_artist.lower()):
-                    rec_songs.append(f"{rec['name']} by {rec['artists'][0]['name']} (album: {rec['album']['name']})\nlink: {rec['external_urls']['spotify']}")
-        formatted_recs = rec_songs[:3]  # Return only the first 3 recommendations
-        print(f"Found recommendations: {formatted_recs}")
-        return formatted_recs if formatted_recs else ["No similar songs found"]
-    print("No similar songs found or response was invalid")
-    return ["No similar songs found"]
+    print(f"spotify search results: {results}")  # debugging line to print the search results
+    
+    if not results['tracks']['items']:
+        print(f"no tracks found for: {song_name} by {artist_name}")
+        return ["no similar songs found"]
+    
+    track = results['tracks']['items'][0]
+    print(f"found track: {track}")  # debugging line to print the found track
+    
+    # use spotify recommendations to find similar tracks
+    artist_id = track['artists'][0]['id']
+    recommendations = spotify.recommendations(seed_artists=[artist_id], seed_tracks=[track['id']], limit=10)
+    print(f"spotify recommendations: {recommendations}")  # debugging line to print spotify recommendations
+    
+    rec_tracks = []
+    for rec in recommendations['tracks']:
+        if len(rec_tracks) < 3 and rec['artists'][0]['name'].lower() != artist_name.lower() and (exclude_artist is None or rec['artists'][0]['name'].lower() != exclude_artist.lower()):
+            rec_tracks.append((rec['name'], rec['artists'][0]['name'], rec['external_urls']['spotify']))
+            print(f"added recommendation: {rec['name']} by {rec['artists'][0]['name']}")  # debugging line to print added recommendations
+    
+    print(f"filtered recommendations before ensuring smaller songs: {rec_tracks}")  # debugging line to print the filtered recommendations
+    
+    # ensure the first recommendation is from a small artist
+    rec_tracks = ensure_smaller_song(rec_tracks)
+    formatted_recs = [f"{name} by {artist}\nlink: {link}" for name, artist, link in [item[:3] for item in rec_tracks]]
+    print(f"found recommendations: {formatted_recs}")
+    return formatted_recs if formatted_recs else ["no similar songs found"]
 
-def get_artist_popularity(artist_name):
-    results = spotify.search(q=f'artist:{artist_name}', type='artist')
-    if results['artists']['items']:
-        artist = results['artists']['items'][0]
-        return artist['followers']['total']
-    return 0
+def ensure_smaller_artist(rec_artists):
+    if len(rec_artists) == 0:
+        return rec_artists
+    
+    # the last.fm request to get the artist's info
+    for i, (name, link) in enumerate(rec_artists):
+        response = lastfm_request('artist.getinfo', {'artist': name})
+        if response and 'artist' in response and 'stats' in response['artist']:
+            stats = response['artist']['stats']
+            if 'listeners' in stats:
+                rec_artists[i] = (name, link, int(stats['listeners']))
+    
+    # sort the list of recommendations by the number of listeners (ascending order)
+    rec_artists.sort(key=lambda x: x[2] if len(x) > 2 else float('inf'))
+    
+    # return only the first artist with the smallest number of listeners
+    return rec_artists[:3]
 
-def filter_smaller_artists(recommendations):
-    smaller_artists = []
-    for artist, link in recommendations:
-        if get_artist_popularity(artist) < 200000:
-            smaller_artists.append((artist, link))
-    return smaller_artists
+def ensure_smaller_album(rec_albums):
+    if len(rec_albums) == 0:
+        return rec_albums
+    
+    # the last.fm request to get the album's info
+    for i, (album, artist, link) in enumerate(rec_albums):
+        response = lastfm_request('album.getinfo', {'album': album, 'artist': artist})
+        if response and 'album' in response and 'listeners' in response['album']:
+            rec_albums[i] = (album, artist, link, int(response['album']['listeners']))
+    
+    # sort the list of recommendations by the number of listeners (ascending order)
+    rec_albums.sort(key=lambda x: x[3] if len(x) > 3 else float('inf'))
+    
+    # return only the first album with the smallest number of listeners
+    return rec_albums[:3]
 
-def ensure_smaller_artist(recommendations):
-    smaller_artists = filter_smaller_artists(recommendations)
-    if smaller_artists:
-        return smaller_artists[:3]  # Return only the first 3 smaller artists
-    else:
-        return recommendations[:3]  # Return the first 3 recommendations if no smaller artists found
+def ensure_smaller_song(rec_songs):
+    if len(rec_songs) == 0:
+        return rec_songs
+    
+    # the last.fm request to get the song's info
+    for i, (song, artist, link) in enumerate(rec_songs):
+        response = lastfm_request('track.getinfo', {'track': song, 'artist': artist})
+        if response and 'track' in response and 'listeners' in response['track']:
+            rec_songs[i] = (song, artist, link, int(response['track']['listeners']))
+    
+    # sort the list of recommendations by the number of listeners (ascending order)
+    rec_songs.sort(key=lambda x: x[3] if len(x) > 3 else float('inf'))
+    
+    # return only the first song with the smallest number of listeners
+    return rec_songs[:3]
 
-def filter_smaller_albums(recommendations):
-    smaller_albums = []
-    for name, artist, link in recommendations:
-        if get_artist_popularity(artist) < 200000:
-            smaller_albums.append((name, artist, link))
-    return smaller_albums
-
-def ensure_smaller_album(recommendations):
-    smaller_albums = filter_smaller_albums(recommendations)
-    if smaller_albums:
-        # Ensure the first recommendation is from a small artist
-        return smaller_albums[:1] + [rec for rec in recommendations if rec not in smaller_albums][:2]
-    else:
-        return recommendations[:3]  # Return the first 3 recommendations if no smaller albums found
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
+
