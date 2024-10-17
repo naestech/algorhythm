@@ -23,12 +23,8 @@
   built in buildspace nights & weekends s5 ⚙️
 </div>
 
-<div align="center">
-  <a href="https://star-history.com/#naestech/algorhythm&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=naestech/algorhythm&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=naestech/algorhythm&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=naestech/algorhythm&type=Date" />
-    </picture>
+<p align="center">
+  <a href="https://github.com/naestech/algorhythm/stargazers">
+    <img src="https://reporoster.com/stars/dark/naestech/algorhythm" alt="Stargazers repo roster for @naestech/algorhythm" />
   </a>
-</div>
+</p>
